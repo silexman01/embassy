@@ -613,9 +613,17 @@ pub(crate) fn init_rcc(_cs: CriticalSection, config: Config) {
                             config.hsi = true;
                         }
                         <$Sel>::Lse => {
-                            if let Some(mut lse_config) = config.ls.lse {
-                                lse_config.peripherals_clocked = true;
-                                config.ls.lse = Some(lse_config);
+                            if let Some(lse_config) = config.ls.lse {
+                                #[cfg(any(rcc_l5, rcc_u5, rcc_u3, rcc_wle, rcc_wl5, rcc_wba))]
+                                {
+                                    let mut lse_config = lse_config;
+                                    lse_config.peripherals_clocked = true;
+                                    config.ls.lse = Some(lse_config);
+                                }
+                                #[cfg(not(any(rcc_l5, rcc_u5, rcc_u3, rcc_wle, rcc_wl5, rcc_wba)))]
+                                {
+                                    config.ls.lse = Some(lse_config);
+                                }
                             } else {
                                 panic!("LSE is not not configured, but selected for time_driver!!!");
                             }
@@ -628,7 +636,12 @@ pub(crate) fn init_rcc(_cs: CriticalSection, config: Config) {
 
             #[cfg(time_driver_lptim1)]
             {
-                #[cfg(not(stm32wba))]
+                #[cfg(stm32wb)]
+                {
+                    use crate::pac::rcc::vals::Lptim1sel;
+                    ensure_lptim_clk!(lptim1sel, Lptim1sel, Lptim1sel::Pclk1);
+                }
+                #[cfg(all(not(stm32wb), not(stm32wba)))]
                 {
                     use crate::pac::rcc::vals::Lptimsel;
                     ensure_lptim_clk!(lptim1sel, Lptimsel, Lptimsel::Pclk1);

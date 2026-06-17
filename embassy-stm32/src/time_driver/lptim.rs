@@ -60,10 +60,17 @@ fn ier_ccie(r: Lptim, n: usize) -> bool {
     }
 }
 
-/// Modify the interrupt enable register.
-fn ier_set_ueie(r: Lptim, val: bool) {
-    #[cfg(not(stm32wba))]
+/// Enable the interrupt used for period rollover.
+///
+/// On STM32WB `lptim_v1b`, periodic wrap uses ARRM/ARRMIE.
+/// `UP/UPIE` is encoder-direction only, and `UE/UEIE` does not exist.
+fn ier_set_periodie(r: Lptim, val: bool) {
+    #[cfg(stm32wb)]
+    r.ier().modify(|w| w.set_arrmie(val));
+
+    #[cfg(all(not(stm32wb), not(stm32wba)))]
     r.ier().modify(|w| w.set_ueie(val));
+
     #[cfg(stm32wba)]
     r.dier().modify(|w| w.set_ueie(val));
 }
@@ -73,6 +80,18 @@ fn ier_set_ccie(r: Lptim, n: usize, val: bool) {
     r.ier().modify(|w| w.set_ccie(n, val));
     #[cfg(stm32wba)]
     r.dier().modify(|w| w.set_ccie(n, val));
+}
+
+fn is_period_flag_set(sr: stm32_metapac::lptim::regs::Isr) -> bool {
+    #[cfg(stm32wb)]
+    {
+        sr.arrm()
+    }
+
+    #[cfg(not(stm32wb))]
+    {
+        sr.ue()
+    }
 }
 
 /// Write a raw value to the ICR (interrupt clear register).
@@ -160,7 +179,7 @@ impl RtcDriver {
         r.arr().write(|w| w.set_arr(u16::MAX));
 
         // Enable overflow interrupts
-        ier_set_ueie(T::regs(), true);
+        ier_set_periodie(T::regs(), true);
 
         <T as crate::lptim::SealedBasicInstance>::GlobalInterrupt::unpend();
         unsafe {
@@ -224,7 +243,7 @@ impl RtcDriver {
             icr_write_raw(r, sr.0);
 
             // Overflow
-            if sr.ue() {
+            if is_period_flag_set(sr) {
                 self.next_period();
             }
 
