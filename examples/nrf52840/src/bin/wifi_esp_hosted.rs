@@ -2,9 +2,11 @@
 #![no_main]
 
 use defmt::{info, unwrap, warn};
+use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_net::StackResources;
 use embassy_net::tcp::TcpSocket;
+use embassy_net_esp_hosted as hosted;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::rng::Rng;
 use embassy_nrf::spim::{self, Spim};
@@ -12,8 +14,9 @@ use embassy_nrf::{bind_interrupts, peripherals};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use embedded_io_async::Write;
+use hosted::iface::spi::SpiInterface;
+use panic_probe as _;
 use static_cell::StaticCell;
-use {defmt_rtt as _, embassy_net_esp_hosted as hosted, panic_probe as _};
 
 const WIFI_NETWORK: &str = "EmbassyTest";
 const WIFI_PASSWORD: &str = "V8YxhKt5CdIAJFud";
@@ -27,7 +30,7 @@ bind_interrupts!(struct Irqs {
 async fn wifi_task(
     runner: hosted::Runner<
         'static,
-        hosted::SpiInterface<ExclusiveDevice<Spim<'static>, Output<'static>, Delay>, Input<'static>>,
+        SpiInterface<ExclusiveDevice<Spim<'static>, Output<'static>, Delay>, Input<'static>>,
         Output<'static>,
     >,
 ) -> ! {
@@ -58,7 +61,7 @@ async fn main(spawner: Spawner) {
     let spi = spim::Spim::new(p.SPI3, Irqs, sck, miso, mosi, config);
     let spi = ExclusiveDevice::new(spi, cs, Delay);
 
-    let iface = hosted::SpiInterface::new(spi, handshake, ready);
+    let iface = SpiInterface::new(spi, handshake, ready);
 
     static ESP_STATE: StaticCell<embassy_net_esp_hosted::State> = StaticCell::new();
     let embassy_net_esp_hosted::HostedResources {
